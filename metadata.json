@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Herbal Client Manager",
+  "description": "Professional clinical management app for herbal practitioners with SOAP notes, client health timelines, supplement tracking, digital intake, and care protocol plans.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

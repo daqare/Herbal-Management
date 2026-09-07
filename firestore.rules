@@ -1,0 +1,196 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny Catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitives & Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(data) {
+      return isVerified() && data.userId == request.auth.uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validations ---
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['name', 'sex', 'phone', 'userId', 'createdAt']) &&
+             data.keys().size() >= 5 && data.keys().size() <= 11 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.sex in ['Male', 'Female', 'Other'] &&
+             data.phone is string && data.phone.matches('^\\+254\\d{9}$') &&
+             data.userId == request.auth.uid &&
+             data.createdAt is timestamp &&
+             (data.get('lastVisitAt', null) == null || data.lastVisitAt is timestamp) &&
+             (data.get('tags', null) == null || (data.tags is list && data.tags.size() <= 30 && (data.tags.size() == 0 || data.tags[0] is string))) &&
+             (data.get('allergies', null) == null || (data.allergies is list && data.allergies.size() <= 20 && (data.allergies.size() == 0 || data.allergies[0] is string))) &&
+             (data.get('cautions', null) == null || (data.cautions is list && data.cautions.size() <= 20 && (data.cautions.size() == 0 || data.cautions[0] is string))) &&
+             (data.get('emergencyContact', null) == null || (data.emergencyContact is string && data.emergencyContact.size() <= 200)) &&
+             (data.get('intakeSummary', null) == null || (data.intakeSummary is string && data.intakeSummary.size() <= 5000));
+    }
+
+    function isValidVisit(data) {
+      return data.keys().hasAll(['clientId', 'date', 'supplements', 'payment', 'userId', 'createdAt']) &&
+             data.keys().size() >= 6 && data.keys().size() <= 8 &&
+             data.clientId is string && isValidId(data.clientId) &&
+             data.date is timestamp &&
+             data.supplements is list && data.supplements.size() <= 50 &&
+             (data.supplements.size() == 0 || data.supplements[0] is string) &&
+             data.payment is number && data.payment >= 0 &&
+             (data.get('notes', null) == null || (data.notes is string && data.notes.size() <= 5000)) &&
+             (data.get('protocol', null) == null || (data.protocol is string && data.protocol.size() <= 2000)) &&
+             data.userId == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidAppointment(data) {
+      return data.keys().hasAll(['clientId', 'date', 'status', 'userId', 'createdAt']) &&
+             data.keys().size() >= 5 && data.keys().size() <= 7 &&
+             data.clientId is string && isValidId(data.clientId) &&
+             (data.get('clientName', null) == null || (data.clientName is string && data.clientName.size() <= 200)) &&
+             data.date is timestamp &&
+             data.status in ['scheduled', 'completed', 'cancelled'] &&
+             (data.get('notes', null) == null || (data.notes is string && data.notes.size() <= 1000)) &&
+             data.userId == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidSupplement(data) {
+      return data.keys().hasAll(['name', 'userId', 'usageCount', 'createdAt']) &&
+             data.keys().size() >= 4 && data.keys().size() <= 5 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.userId == request.auth.uid &&
+             data.usageCount is number && data.usageCount >= 0 &&
+             data.createdAt is timestamp &&
+             (data.get('updatedAt', null) == null || data.updatedAt is timestamp);
+    }
+
+    function isValidMetric(data) {
+      return data.keys().hasAll(['clientId', 'type', 'value', 'unit', 'date', 'userId', 'createdAt']) &&
+             data.keys().size() == 7 &&
+             data.clientId is string && isValidId(data.clientId) &&
+             data.type in ["Weight", "Blood Pressure", "Heart Rate", "Blood Sugar", "Temperature"] &&
+             data.value is string && data.value.size() <= 64 &&
+             data.unit is string && data.unit.size() <= 32 &&
+             data.date is timestamp &&
+             data.userId == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMedicalDocument(data) {
+      return data.keys().hasAll(['clientId', 'title', 'type', 'date', 'userId', 'createdAt']) &&
+             data.clientId is string && isValidId(data.clientId) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.type in ["Lab Report", "Prescription", "Image", "Other"] &&
+             (data.get('fileUrl', null) == null || (data.fileUrl is string && data.fileUrl.size() <= 2048)) &&
+             (data.get('contentSummary', null) == null || (data.contentSummary is string && data.contentSummary.size() <= 10000)) &&
+             data.date is timestamp &&
+             data.userId == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    // --- Collection Routes ---
+
+    match /clients/{clientId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidId(clientId) && isValidClient(incoming()) && incoming().createdAt == request.time;
+      allow update: if isOwner(existing()) && isValidClient(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'sex', 'phone', 'lastVisitAt', 'tags', 'allergies', 'cautions', 'emergencyContact', 'intakeSummary']);
+      allow delete: if isOwner(existing());
+    }
+
+    match /visits/{visitId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidId(visitId) && isValidVisit(incoming()) && 
+                       incoming().createdAt == request.time &&
+                       exists(/databases/$(database)/documents/clients/$(incoming().clientId)) &&
+                       get(/databases/$(database)/documents/clients/$(incoming().clientId)).data.userId == request.auth.uid;
+      allow update: if isOwner(existing()) && isValidVisit(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().clientId == existing().clientId &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['date', 'supplements', 'payment', 'notes', 'protocol']);
+      allow delete: if isOwner(existing());
+    }
+
+    match /appointments/{appointmentId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidId(appointmentId) && isValidAppointment(incoming()) && 
+                       incoming().createdAt == request.time &&
+                       exists(/databases/$(database)/documents/clients/$(incoming().clientId)) &&
+                       get(/databases/$(database)/documents/clients/$(incoming().clientId)).data.userId == request.auth.uid;
+      allow update: if isOwner(existing()) && isValidAppointment(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().clientId == existing().clientId &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['date', 'status', 'notes', 'clientName']);
+      allow delete: if isOwner(existing());
+    }
+
+    match /supplements/{suppId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidId(suppId) && isValidSupplement(incoming()) && incoming().createdAt == request.time;
+      allow update: if isOwner(existing()) && isValidSupplement(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['usageCount', 'name', 'updatedAt']);
+      allow delete: if isOwner(existing());
+    }
+
+    match /metrics/{metricId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidId(metricId) && isValidMetric(incoming()) && 
+                       incoming().createdAt == request.time &&
+                       exists(/databases/$(database)/documents/clients/$(incoming().clientId)) &&
+                       get(/databases/$(database)/documents/clients/$(incoming().clientId)).data.userId == request.auth.uid;
+      allow update: if isOwner(existing()) && isValidMetric(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().clientId == existing().clientId &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['type', 'value', 'unit', 'date']);
+      allow delete: if isOwner(existing());
+    }
+
+    match /documents/{docId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidId(docId) && isValidMedicalDocument(incoming()) && 
+                       incoming().createdAt == request.time &&
+                       exists(/databases/$(database)/documents/clients/$(incoming().clientId)) &&
+                       get(/databases/$(database)/documents/clients/$(incoming().clientId)).data.userId == request.auth.uid;
+      allow update: if isOwner(existing()) && isValidMedicalDocument(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().clientId == existing().clientId &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['title', 'type', 'fileUrl', 'date']);
+      allow delete: if isOwner(existing());
+    }
+  }
+}

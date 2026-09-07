@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "A health consultant's client",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full name of the client" },
+        "sex": { "type": "string", "enum": ["Male", "Female", "Other"], "description": "Sex of the client" },
+        "phone": { "type": "string", "description": "Kenyan format phone number (+254...)" },
+        "tags": { "type": "array", "items": { "type": "string" }, "description": "Custom tags (e.g., Chronic, Follow-up, Consultation)" },
+        "allergies": { "type": "array", "items": { "type": "string" }, "description": "Client allergies (e.g., Penicillin, Ragweed)" },
+        "cautions": { "type": "array", "items": { "type": "string" }, "description": "Clinical precautions (e.g., Pregnant, Hypertensive, Blood Thinners)" },
+        "emergencyContact": { "type": "string", "description": "Emergency contact name, relation, and phone" },
+        "intakeSummary": { "type": "string", "description": "Clinical intake questionnaire summary" },
+        "userId": { "type": "string", "description": "UID of the consultant who owns this record" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "sex", "phone", "userId", "createdAt"]
+    },
+    "Visit": {
+      "title": "Visit",
+      "description": "A client's health visit record",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string", "description": "ID of the client" },
+        "date": { "type": "string", "format": "date-time", "description": "Date of the visit" },
+        "supplements": { "type": "array", "items": { "type": "string" }, "description": "List of supplements taken" },
+        "payment": { "type": "number", "description": "Payment amount in KES" },
+        "notes": { "type": "string", "description": "Clinical notes (SOAP notes: Subjective, Objective, Assessment, Plan)" },
+        "protocol": { "type": "string", "description": "Herbal dosage, preparation, and administration protocol" },
+        "userId": { "type": "string", "description": "UID of the consultant" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "date", "supplements", "payment", "userId", "createdAt"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "A scheduled appointment",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string", "description": "ID of the client" },
+        "clientName": { "type": "string", "description": "Cached name of the client for easier display" },
+        "date": { "type": "string", "format": "date-time", "description": "Scheduled date and time" },
+        "notes": { "type": "string", "description": "Notes for the appointment" },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"], "description": "Current status" },
+        "userId": { "type": "string", "description": "UID of the consultant" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "date", "status", "userId", "createdAt"]
+    },
+    "Supplement": {
+      "title": "Supplement",
+      "description": "A master list entry for a supplement",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the supplement" },
+        "userId": { "type": "string", "description": "UID of the consultant" },
+        "usageCount": { "type": "number", "description": "Number of times used" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "userId", "usageCount", "createdAt"]
+    },
+    "Metric": {
+      "title": "Metric",
+      "description": "A health metric for checking progress",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "type": { "type": "string", "enum": ["Weight", "Blood Pressure", "Heart Rate", "Blood Sugar", "Temperature"] },
+        "value": { "type": "string" },
+        "unit": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "type", "value", "unit", "date", "userId", "createdAt"]
+    },
+    "MedicalDocument": {
+      "title": "MedicalDocument",
+      "description": "A linked or uploaded medical document or report",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["Lab Report", "Prescription", "Image", "Other"] },
+        "fileUrl": { "type": "string" },
+        "contentSummary": { "type": "string", "description": "AI-generated summary or extracted content" },
+        "date": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "title", "type", "date", "userId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "clients": {
+      "schema": "Client",
+      "description": "Collection of clients"
+    },
+    "visits": {
+      "schema": "Visit",
+      "description": "Collection of visits"
+    },
+    "appointments": {
+      "schema": "Appointment",
+      "description": "Collection of appointments"
+    },
+    "supplements": {
+      "schema": "Supplement",
+      "description": "Collection of master supplements"
+    },
+    "metrics": {
+      "schema": "Metric",
+      "description": "Collection of body metrics"
+    },
+    "documents": {
+      "schema": "MedicalDocument",
+      "description": "Collection of medical documents"
+    }
+  }
+}
